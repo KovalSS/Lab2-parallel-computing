@@ -11,7 +11,7 @@ public class MatrixUtils {
 
         for (int i = 0; i < rows; i++) {
             for (int j = 0; j < cols; j++) {
-                matrix[i][j] = random.nextInt(max - min) + min;
+                matrix[i][j] = random.nextInt(max - min) + min + 1;
             }
         }
 

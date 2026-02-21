@@ -1,4 +1,6 @@
-import java.util.ArrayList;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 
 public class RunTask {
     private static final int CHECK_MODULUS = 5;
@@ -8,6 +10,9 @@ public class RunTask {
     private static final int MIN_ELEM = 0;
     private static final int MAX_ELEM = 10000000;
     private static final int RUNS = 5;
+    private static final int MIN_MATRIX_SIZE = 1000;
+    private static final int MAX_MATRIX_SIZE = 15000;
+    private static final int STEP_MATRIX_SIZE = 1000;
     public RunTask() {
     }
     private Result multiplesSequentially(int[][] matrix){
@@ -110,6 +115,64 @@ public class RunTask {
 
             matrix = null;
             System.gc();
+        }
+    }
+
+    public void exportBenchmarkToCSV(int threadCount) {
+
+        String csvFileName = "benchmark_results.csv";
+
+        System.out.println("--- Start of JVM warm-up before benchmark ---");
+        int[][] dummyMatrix = MatrixUtils.generateTestMatrix(5000, 5000, MIN_ELEM, MAX_ELEM, SEED);
+        for (int i = 0; i < 10; i++) {
+            multiplesWithThreads(dummyMatrix, threadCount, new SynchronizedAccumulator());
+            multiplesWithThreads(dummyMatrix, threadCount, new AtomicAccumulator());
+        }
+        dummyMatrix = null;
+        System.gc();
+        try { Thread.sleep(1000);} catch (InterruptedException e) {e.printStackTrace();}
+        System.out.println("--- Warming up is complete. JVM optimized ---\n");
+
+        try (PrintWriter writer = new PrintWriter(new FileWriter(csvFileName))) {
+            writer.println("MatrixSize,SynchronizedTimeMs,AtomicTimeMs");
+
+            System.out.println("Start of CSV testing and generation...");
+
+            for (int size = MIN_MATRIX_SIZE; size <= MAX_MATRIX_SIZE; size += STEP_MATRIX_SIZE) {
+                int[][] matrix = MatrixUtils.generateTestMatrix(size, size, MIN_ELEM, MAX_ELEM, SEED);
+                long start, end;
+
+                long syncMinTime = Long.MAX_VALUE;
+                for (int i = 0; i < RUNS; i++) {
+                    Accumulator syncAcc = new SynchronizedAccumulator();
+                    start = System.nanoTime();
+                    multiplesWithThreads(matrix, threadCount, syncAcc);
+                    end = System.nanoTime();
+                    long timeMs = (end - start) / 1_000_000;
+                    if (timeMs < syncMinTime) syncMinTime = timeMs;
+                }
+                System.gc();
+                try { Thread.sleep(3000);} catch (InterruptedException e) {e.printStackTrace();}
+                long atomicMinTime = Long.MAX_VALUE;
+                for (int i = 0; i < RUNS; i++) {
+                    Accumulator atomicAcc = new AtomicAccumulator();
+                    start = System.nanoTime();
+                    multiplesWithThreads(matrix, threadCount, atomicAcc);
+                    end = System.nanoTime();
+                    long timeMs = (end - start) / 1_000_000;
+                    if (timeMs < atomicMinTime) atomicMinTime = timeMs;
+                }
+
+                System.out.println("N: " + size + ", SynchronizedTime: " + syncMinTime + " ms, AtomicTime: " + atomicMinTime + " ms");
+                writer.println(size + "," + syncMinTime + "," + atomicMinTime);
+                matrix = null;
+                System.gc();
+                try { Thread.sleep(3000);} catch (InterruptedException e) {e.printStackTrace();}
+            }
+            System.out.println("\nData successfully saved to file: " + csvFileName);
+
+        } catch (IOException e) {
+            System.err.println("Error writing to file: " + e.getMessage());
         }
     }
 }
